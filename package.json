@@ -1,0 +1,43 @@
+{
+  "name": "taskmanager-devops",
+  "version": "1.0.0",
+  "description": "Task Manager REST API — Full DevOps learning project",
+  "main": "src/index.js",
+  "scripts": {
+    "start":             "node src/index.js",
+    "dev":               "nodemon src/index.js",
+    "test":              "jest --coverage --forceExit",
+    "test:unit":         "jest tests/unit --coverage",
+    "test:integration":  "jest tests/integration --forceExit",
+    "lint":              "eslint src/ --ext .js",
+    "lint:fix":          "eslint src/ --ext .js --fix"
+  },
+  "dependencies": {
+    "express":      "^4.18.2",
+    "cors":         "^2.8.5",
+    "dotenv":       "^16.0.3",
+    "pg":           "^8.10.0",
+    "bcryptjs":     "^2.4.3",
+    "jsonwebtoken": "^9.0.0",
+    "redis":        "^4.6.5",
+    "joi":          "^17.9.2",
+    "morgan":       "^1.10.0",
+    "helmet":       "^7.0.0"
+  },
+  "devDependencies": {
+    "jest":          "^29.5.0",
+    "supertest":     "^6.3.3",
+    "nodemon":       "^3.0.1",
+    "eslint":        "^8.41.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": ["src/**/*.js"],
+    "coverageThreshold": {
+      "global": { "lines": 70 }
+    }
+  }
+}
