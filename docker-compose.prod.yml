@@ -1,0 +1,31 @@
+# docker-compose.prod.yml
+# Used in production: docker compose -f docker-compose.yml -f docker-compose.prod.yml up
+
+version: '3.9'
+
+services:
+  api:
+    build:
+      target: production       # Use the 'production' stage — no devDeps, smaller image
+    command: ["node", "src/index.js"]   # No nodemon in production
+    environment:
+      NODE_ENV: production
+      # In production, secrets come from HashiCorp Vault (Phase 4)
+      # These are placeholders — never hardcode real secrets
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    volumes: []                # No source code mounting in production
+    deploy:
+      replicas: 2              # Run 2 instances for high availability
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports: []                  # Don't expose DB port publicly in production

@@ -1,0 +1,96 @@
+# docker-compose.yml
+# Defines the full local development environment.
+# Run everything with: docker compose up
+# Stop everything with: docker compose down
+
+version: '3.9'
+
+services:
+
+  # ── Our Node.js API ────────────────────────────────────────────
+  api:
+    build:
+      context: .           # Build from current directory
+      dockerfile: Dockerfile
+      target: builder      # Use the 'builder' stage (includes devDeps for hot-reload)
+    container_name: taskmanager-api
+    ports:
+      - "3000:3000"        # host_port:container_port
+                           # localhost:3000 forwards to container's port 3000
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: postgres    # 'postgres' is the service name below — Docker's DNS resolves it
+      DB_PORT: 5432
+      DB_NAME: taskmanager
+      DB_USER: postgres
+      DB_PASSWORD: devpassword
+      REDIS_HOST: redis    # Same — 'redis' resolves to the redis service
+      REDIS_PORT: 6379
+      JWT_SECRET: dev-secret-not-for-production-min-32-chars
+    volumes:
+      - ./src:/app/src     # Mount local src/ into container
+                           # Changes to your code reflect instantly — no rebuild needed
+                           # This is why we use 'builder' stage (has nodemon)
+    command: ["npm", "run", "dev"]   # Override CMD to use nodemon for hot-reload
+    depends_on:
+      postgres:
+        condition: service_healthy   # Wait until postgres is ready before starting API
+      redis:
+        condition: service_healthy
+    networks:
+      - taskmanager-network
+    restart: unless-stopped
+
+  # ── PostgreSQL Database ────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine        # Official Postgres image, Alpine variant
+    container_name: taskmanager-postgres
+    environment:
+      POSTGRES_DB: taskmanager       # Creates this database on first run
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: devpassword
+    ports:
+      - "5432:5432"                  # Expose so you can connect with DBeaver/pgAdmin locally
+    volumes:
+      - postgres_data:/var/lib/postgresql/data   # Named volume — data persists across restarts
+      - ./src/config/init.sql:/docker-entrypoint-initdb.d/init.sql  # Run on first start
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - taskmanager-network
+    restart: unless-stopped
+
+  # ── Redis Cache ────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: taskmanager-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data             # Persist Redis data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - taskmanager-network
+    restart: unless-stopped
+
+# ── Named volumes ──────────────────────────────────────────────
+# Docker manages these — data survives 'docker compose down'
+# Only removed with 'docker compose down -v'
+volumes:
+  postgres_data:
+  redis_data:
+
+# ── Network ────────────────────────────────────────────────────
+# All services on this network can reach each other by service name
+# e.g. the API connects to 'postgres:5432' not '172.17.0.x:5432'
+networks:
+  taskmanager-network:
+    driver: bridge

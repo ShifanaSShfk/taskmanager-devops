@@ -1,0 +1,35 @@
+# Dependencies — the container installs its own
+node_modules/
+npm-debug.log*
+
+# Git history — not needed inside the container
+.git/
+.gitignore
+
+# Environment files — secrets never go into images
+.env
+.env.*
+
+# Test output
+coverage/
+*.log
+logs/
+
+# Docker files themselves
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# DevOps config (not needed in runtime image)
+k8s/
+terraform/
+ansible/
+monitoring/
