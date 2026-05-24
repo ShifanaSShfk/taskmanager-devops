@@ -1,0 +1,42 @@
+# .github/workflows/pr-checks.yml
+# Extra checks that run only on Pull Requests.
+# Enforces code review standards before merging.
+
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  pr-validation:
+    name: Validate PR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0             # Full history needed for commit analysis
+
+      # Check that the PR title follows Conventional Commits format
+      # e.g. "feat(tasks): add filtering" — not "fixed stuff"
+      - name: Validate commit messages
+        uses: wagoid/commitlint-github-action@v5
+
+      # Post a comment on the PR with a summary of what changed
+      - name: Check PR size
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            const additions = pr.additions;
+            const deletions = pr.deletions;
+            if (additions + deletions > 500) {
+              core.warning(`Large PR: +${additions} -${deletions} lines. Consider splitting.`);
+            }
+            console.log(`PR size: +${additions} -${deletions}`);

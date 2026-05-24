@@ -1,0 +1,193 @@
+# .github/workflows/ci.yml
+# Runs on every push and pull request.
+# Purpose: fast feedback — catch broken code in under 3 minutes.
+
+name: CI Pipeline
+
+# ── Triggers ─────────────────────────────────────────────────────
+on:
+  push:
+    branches: [main, develop]        # Run on pushes to these branches
+  pull_request:
+    branches: [main, develop]        # Run on PRs targeting these branches
+
+# ── Environment variables (non-secret) ───────────────────────────
+env:
+  NODE_VERSION: '18'
+  IMAGE_NAME: taskmanager-api
+
+# ── Jobs ─────────────────────────────────────────────────────────
+jobs:
+
+  # ── Job 1: Lint ──────────────────────────────────────────────────
+  # Catches syntax errors and style issues before wasting time on tests
+  lint:
+    name: Lint code
+    runs-on: ubuntu-latest           # GitHub provides this VM for free
+
+    steps:
+      # Step 1: Check out your repo code onto the runner VM
+      - name: Checkout code
+        uses: actions/checkout@v4    # Official GitHub action
+
+      # Step 2: Set up the exact Node.js version we need
+      - name: Set up Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'               # Cache node_modules between runs = faster
+
+      # Step 3: Install dependencies
+      # npm ci is faster than npm install and strictly uses package-lock.json
+      - name: Install dependencies
+        run: npm ci
+
+      # Step 4: Run ESLint
+      # If any lint errors exist, this step fails and the whole job fails
+      - name: Run linter
+        run: npm run lint
+
+  # ── Job 2: Test ──────────────────────────────────────────────────
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    needs: lint                      # Only run if lint job passes first
+
+    # Spin up a real PostgreSQL and Redis for integration tests
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: taskmanager_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpassword
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Run all tests with coverage reporting
+      - name: Run unit tests
+        run: npm run test:unit
+        env:
+          NODE_ENV: test
+
+      - name: Run integration tests
+        run: npm run test:integration
+        env:
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: taskmanager_test
+          DB_USER: postgres
+          DB_PASSWORD: testpassword
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          JWT_SECRET: test-secret-at-least-32-characters-long
+
+      # Upload coverage report as a build artifact
+      # You can download it from the GitHub Actions run page
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7          # Auto-delete after 7 days
+
+  # ── Job 3: Build Docker image ─────────────────────────────────────
+  build:
+    name: Build and push Docker image
+    runs-on: ubuntu-latest
+    needs: test                      # Only build if tests pass
+
+    # Only push the image on pushes to main or develop (not on PRs)
+    # On PRs, we only build to verify it compiles — no push
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Login to Docker Hub using secrets stored in GitHub Settings
+      # Secrets are never visible in logs — GitHub masks them automatically
+      - name: Login to Docker Hub
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Set up Docker Buildx — enables advanced build features like caching
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Generate image tags:
+      # On develop branch: taskmanager-api:develop-abc1234
+      # On main branch:    taskmanager-api:latest AND taskmanager-api:1.0.0
+      - name: Generate Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      # Build and push the image
+      # Uses GitHub Actions cache to speed up repeated builds
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: production
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha        # Use GitHub Actions cache
+          cache-to: type=gha,mode=max
+
+  # ── Job 4: Security scan ──────────────────────────────────────────
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Scan for known vulnerabilities in npm packages
+      - name: Run npm audit
+        run: npm audit --audit-level=high
+        continue-on-error: true      # Don't fail the pipeline, just warn
+
+      # Scan for secrets accidentally committed to the repo
+      - name: Scan for secrets with Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
