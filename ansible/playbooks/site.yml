@@ -1,0 +1,12 @@
+- name: Configure Task Manager server
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+
+  vars_files:
+    - ../group_vars/all.yml
+
+  roles:
+    - role: ../roles/docker
+    - role: ../roles/app
+    - role: ../roles/nginx

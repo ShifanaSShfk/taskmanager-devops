@@ -1,0 +1,19 @@
+- name: Check if Docker is installed
+  ansible.builtin.command: docker --version
+  register: docker_check
+  ignore_errors: yes
+  changed_when: false
+
+- name: Print Docker status
+  ansible.builtin.debug:
+    msg: "{{ 'Docker already installed: ' + docker_check.stdout if docker_check.rc == 0 else 'Docker not found — install it from https://docs.docker.com/get-docker/' }}"
+
+- name: Check if Docker daemon is running
+  ansible.builtin.command: docker info
+  register: docker_info
+  ignore_errors: yes
+  changed_when: false
+
+- name: Print Docker daemon status
+  ansible.builtin.debug:
+    msg: "{{ 'Docker daemon is running' if docker_info.rc == 0 else 'Docker daemon is NOT running — please start Docker' }}"

@@ -1,0 +1,24 @@
+- name: Check if Nginx is installed
+  ansible.builtin.command: nginx -v
+  register: nginx_check
+  ignore_errors: yes
+  changed_when: false
+
+- name: Print Nginx status
+  ansible.builtin.debug:
+    msg: "{{ 'Nginx found: ' + nginx_check.stderr if nginx_check.rc == 0 else 'Nginx not installed — skipping config' }}"
+
+- name: Write Nginx config to temp
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /tmp/{{ app_name }}-nginx.conf
+    mode: '0644'
+
+- name: Show generated Nginx config
+  ansible.builtin.command: cat /tmp/{{ app_name }}-nginx.conf
+  register: nginx_output
+  changed_when: false
+
+- name: Print Nginx config
+  ansible.builtin.debug:
+    msg: "{{ nginx_output.stdout_lines }}"

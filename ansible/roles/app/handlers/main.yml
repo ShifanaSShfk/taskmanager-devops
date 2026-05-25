@@ -1,0 +1,8 @@
+# ansible/roles/app/handlers/main.yml
+# Handlers only run when notified AND only run once, at the end of the play.
+# If 3 tasks all notify "restart app", it only restarts once.
+
+- name: restart app
+  ansible.builtin.command:
+    cmd: docker compose restart api
+    chdir: "{{ app_dir }}"

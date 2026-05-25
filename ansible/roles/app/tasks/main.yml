@@ -1,0 +1,32 @@
+- name: Create app directory
+  ansible.builtin.file:
+    path: "{{ app_dir }}"
+    state: directory
+    mode: '0755'
+  become: yes
+  ignore_errors: yes
+
+- name: Write docker-compose file
+  ansible.builtin.template:
+    src: docker-compose.prod.yml.j2
+    dest: "/tmp/{{ app_name }}-docker-compose.yml"
+    mode: '0644'
+
+- name: Write environment file
+  ansible.builtin.template:
+    src: app.env.j2
+    dest: "/tmp/{{ app_name }}.env"
+    mode: '0600'
+
+- name: Show generated docker-compose
+  ansible.builtin.command: cat /tmp/{{ app_name }}-docker-compose.yml
+  register: compose_output
+  changed_when: false
+
+- name: Print docker-compose content
+  ansible.builtin.debug:
+    msg: "{{ compose_output.stdout_lines }}"
+
+- name: Show generated env file
+  ansible.builtin.debug:
+    msg: "Environment file written to /tmp/{{ app_name }}.env"

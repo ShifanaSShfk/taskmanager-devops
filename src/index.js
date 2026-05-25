@@ -40,3 +40,37 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT',  () => gracefulShutdown('SIGINT'));   // Ctrl+C
 
 module.exports = server;
+
+
+// src/index.js — updated to load Vault secrets first
+const { loadSecrets } = require('./config/vault');
+const app = require('./app');
+
+const PORT = process.env.PORT || 3000;
+
+async function startServer() {
+  // Load secrets from Vault BEFORE starting the server
+  // This ensures DB_PASSWORD, JWT_SECRET etc. are set
+  await loadSecrets();
+
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Task Manager API running on port ${PORT}`);
+    console.log(`Vault: ${process.env.VAULT_ADDR || 'not configured (using env vars)'}`);
+  });
+
+  const gracefulShutdown = (signal) => {
+    console.log(`${signal} received. Shutting down...`);
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(1), 10000);
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
+
+  return server;
+}
+
+startServer().catch(err => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
+});

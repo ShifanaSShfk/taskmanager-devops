@@ -1,0 +1,21 @@
+# ansible/group_vars/all.yml
+# Variables shared across all hosts and playbooks.
+# Secrets (passwords, tokens) come from Vault — see vault-agent role.
+
+app_name: taskmanager
+app_dir: /opt/taskmanager
+app_port: 3000
+node_env: production
+db_name: taskmanager
+db_user: postgres
+
+# Docker image to deploy — override at deploy time with -e flag
+dockerhub_username: YOUR_DOCKERHUB_USERNAME
+docker_image: "{{ dockerhub_username }}/taskmanager-api:latest"
+
+# Secret variables — loaded from HashiCorp Vault at runtime.
+# These are placeholder names — Vault fills in the values.
+# db_password: "{{ lookup('hashi_vault', 'secret/taskmanager/db:password') }}"
+# jwt_secret:  "{{ lookup('hashi_vault', 'secret/taskmanager/app:jwt_secret') }}"
+# For local testing without Vault, override these in the command line:
+# ansible-playbook ... -e "db_password=mypass jwt_secret=mysecret"
