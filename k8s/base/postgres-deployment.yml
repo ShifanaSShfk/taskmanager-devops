@@ -1,0 +1,93 @@
+# k8s/base/postgres-deployment.yml
+# A Deployment manages pods — ensures the desired number always runs.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: taskmanager
+  labels:
+    app: postgres
+spec:
+  replicas: 1              # Only 1 replica for a database (clustering is complex)
+  selector:
+    matchLabels:
+      app: postgres        # This Deployment manages pods with this label
+  template:
+    metadata:
+      labels:
+        app: postgres      # Every pod gets this label
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+
+          # Load env vars from ConfigMap and Secret
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: taskmanager-config
+                  key: DB_NAME
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: taskmanager-config
+                  key: DB_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:          # From Secret — not ConfigMap
+                  name: taskmanager-secrets
+                  key: DB_PASSWORD
+
+          # Liveness probe — K8s restarts the container if this fails
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+
+          # Readiness probe — K8s only sends traffic when this passes
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+
+          # Resource limits — prevents one container consuming the whole node
+          resources:
+            requests:
+              memory: "128Mi"    # Guaranteed minimum
+              cpu: "100m"        # 100 millicores = 0.1 CPU
+            limits:
+              memory: "512Mi"    # Hard maximum
+              cpu: "500m"
+
+          # Mount the persistent volume here
+          volumeMounts:
+            - name: postgres-storage
+              mountPath: /var/lib/postgresql/data
+
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc   # References the PVC below
+
+---
+# PersistentVolumeClaim — requests storage from the cluster.
+# Without this, all database data is lost when the pod restarts.
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: taskmanager
+spec:
+  accessModes:
+    - ReadWriteOnce          # Can only be mounted by one pod at a time (fine for Postgres)
+  resources:
+    requests:
+      storage: 1Gi           # Request 1 GB of storage

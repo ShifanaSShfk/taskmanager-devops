@@ -1,0 +1,15 @@
+# k8s/base/api-service.yml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: taskmanager-api-service
+  namespace: taskmanager
+spec:
+  selector:
+    app: taskmanager-api
+  ports:
+    - protocol: TCP
+      port: 80               # Service listens on port 80
+      targetPort: 3000       # Forwards to container port 3000
+  type: ClusterIP

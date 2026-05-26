@@ -1,0 +1,102 @@
+# k8s/base/api-deployment.yml
+# This is the most important manifest — our Node.js app.
+# We run 2 replicas so if one crashes, the other handles traffic
+# while Kubernetes restarts the crashed one.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taskmanager-api
+  namespace: taskmanager
+  labels:
+    app: taskmanager-api
+  annotations:
+    # Recorded in deployment history — visible in kubectl rollout history
+    kubernetes.io/change-cause: "Initial deployment"
+spec:
+  replicas: 2
+
+  # Rolling update strategy — zero downtime deployments
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1            # Start 1 extra pod before killing old ones
+      maxUnavailable: 0      # Never have fewer than desired replicas running
+
+  selector:
+    matchLabels:
+      app: taskmanager-api
+
+  template:
+    metadata:
+      labels:
+        app: taskmanager-api
+        version: "1.0.0"
+    spec:
+      # Graceful shutdown — wait 30s for in-flight requests to complete
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: taskmanager-api
+          # Replace with your actual Docker Hub image
+          image: taskmanager-api:latest
+          imagePullPolicy: Never   # Always pull latest from registry
+          ports:
+            - containerPort: 3000
+              name: http
+
+          # Load all non-secret config from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: taskmanager-config
+
+          # Load secret values individually
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: taskmanager-secrets
+                  key: DB_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: taskmanager-secrets
+                  key: JWT_SECRET
+
+          # Liveness probe — if this fails 3 times, container is restarted
+          # Uses our /health endpoint from Phase 1
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 15   # Wait 15s after start before probing
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+
+          # Readiness probe — pod only receives traffic when this passes
+          # This prevents sending requests to a pod that's still starting up
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+
+          # Startup probe — gives slow-starting containers time to initialize
+          # Checked first — liveness/readiness only activate after this passes
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            failureThreshold: 12      # 12 * 5s = 60s maximum startup time
+            periodSeconds: 5
+
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"

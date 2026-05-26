@@ -1,0 +1,26 @@
+# k8s/base/ingress.yml
+# Ingress routes external HTTP traffic to the right Service.
+# Think of it as an Nginx reverse proxy, but managed by Kubernetes.
+# Requires the ingress-nginx addon (enabled in Step 1).
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: taskmanager-ingress
+  namespace: taskmanager
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: taskmanager.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: taskmanager-api-service
+                port:
+                  number: 80

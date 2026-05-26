@@ -1,0 +1,11 @@
+# k8s/base/namespace.yml
+# A namespace isolates all our resources from other apps in the cluster.
+# Every resource we create will go in this namespace.
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: taskmanager
+  labels:
+    app: taskmanager
+    managed-by: kubectl

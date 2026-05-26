@@ -1,0 +1,18 @@
+# k8s/base/postgres-service.yml
+# A Service gives the postgres pod a stable DNS name inside the cluster.
+# Other pods reach postgres at: postgres-service:5432
+# Without this, pods would need to know the pod IP — which changes constantly.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: taskmanager
+spec:
+  selector:
+    app: postgres            # Forwards traffic to pods with this label
+  ports:
+    - protocol: TCP
+      port: 5432             # Port the Service listens on
+      targetPort: 5432       # Port on the pod to forward to
+  type: ClusterIP            # Only reachable inside the cluster (not from outside)

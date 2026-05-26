@@ -1,0 +1,19 @@
+# k8s/base/configmap.yml
+# Stores non-sensitive configuration as key-value pairs.
+# Injected into pods as environment variables.
+# Change this without rebuilding the Docker image.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: taskmanager-config
+  namespace: taskmanager
+data:
+  NODE_ENV:    "production"
+  PORT:        "3000"
+  DB_HOST:     "postgres-service"    # The Service name — K8s DNS resolves this
+  DB_PORT:     "5432"
+  DB_NAME:     "taskmanager"
+  DB_USER:     "postgres"
+  REDIS_HOST:  "redis-service"       # Same — Service name as DNS
+  REDIS_PORT:  "6379"

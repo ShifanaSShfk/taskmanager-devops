@@ -1,0 +1,48 @@
+# k8s/base/hpa.yml
+# Automatically scales the number of API pods based on CPU usage.
+# Below 50% CPU: scale down to minimum (2 pods).
+# Above 50% CPU: scale up, up to 10 pods.
+# This is what makes the app handle traffic spikes automatically.
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: taskmanager-api-hpa
+  namespace: taskmanager
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: taskmanager-api
+
+  minReplicas: 2             # Always run at least 2 (high availability)
+  maxReplicas: 10            # Scale up to 10 under load
+
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50   # Scale up when average CPU > 50%
+
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 70   # Also scale on memory pressure
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30    # Wait 30s before scaling up again
+      policies:
+        - type: Pods
+          value: 2                      # Add max 2 pods at a time
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300   # Wait 5 minutes before scaling down
+      policies:
+        - type: Pods
+          value: 1                      # Remove 1 pod at a time (careful)
+          periodSeconds: 60
