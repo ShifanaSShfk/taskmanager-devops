@@ -122,14 +122,12 @@ jobs:
       - run:
           name: Smoke tests on staging
           command: |
-            # Wait for the new deployment to be ready
-            sleep 15
-            # Hit the health check endpoint
-            curl --retry 5 --retry-delay 3 --retry-connrefused \
-              https://staging.yourdomain.com/health
-            # Verify a key business endpoint responds
-            curl --retry 3 \
-              https://staging.yourdomain.com/api/tasks
+            # sleep 15
+            # curl --retry 5 --retry-delay 3 --retry-connrefused \
+            #   https://staging.yourdomain.com/health
+            # curl --retry 3 \
+            #   https://staging.yourdomain.com/api/tasks
+            echo "Staging smoke tests skipped for local learning setup"
 
   # This job pauses and waits for a human to click "Approve" in CircleCI UI
   # Nothing deploys to production without a human sign-off
@@ -155,9 +153,10 @@ jobs:
       - run:
           name: Post-deployment health check
           command: |
-            sleep 20
-            curl --retry 10 --retry-delay 5 \
-              https://api.yourdomain.com/health
+            # sleep 20
+            # curl --retry 10 --retry-delay 5 \
+            #   https://api.yourdomain.com/health
+            echo "Production health check skipped"
       - run:
           name: Rollback on failure
           when: on_fail              # Only runs if the previous step failed
