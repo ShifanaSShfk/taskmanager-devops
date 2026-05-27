@@ -74,4 +74,24 @@ app.use((err, req, res, next) => {
   });
 });
 
+
+// Add these lines to src/app.js
+
+const { register, metricsMiddleware } = require('./config/metrics');
+
+// Add metrics middleware BEFORE routes
+// Records timing and count for every request automatically
+app.use(metricsMiddleware);
+
+// Prometheus scrapes this endpoint every 15 seconds
+// Returns all metrics in Prometheus text format
+app.get('/metrics', async (req, res) => {
+  try {
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+  } catch (err) {
+    res.status(500).end(err.message);
+  }
+});
+
 module.exports = app;

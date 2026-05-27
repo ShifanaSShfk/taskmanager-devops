@@ -1,0 +1,16 @@
+# monitoring/grafana/provisioning/datasources/prometheus.yml
+# Automatically connects Grafana to Prometheus on startup.
+# No manual UI configuration needed.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090    # Service name — Docker/K8s DNS
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: "15s"          # Match Prometheus scrape interval
+      httpMethod: POST

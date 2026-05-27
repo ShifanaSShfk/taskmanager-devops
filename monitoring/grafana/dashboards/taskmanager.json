@@ -1,0 +1,86 @@
+{
+  "title": "Task Manager API",
+  "uid": "taskmanager-api",
+  "timezone": "browser",
+  "refresh": "15s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate (req/sec)",
+      "type": "graph",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [{
+        "expr": "sum(rate(taskmanager_http_requests_total[1m])) by (method, route)",
+        "legendFormat": "{{method}} {{route}}"
+      }]
+    },
+    {
+      "id": 2,
+      "title": "Error Rate (%)",
+      "type": "graph",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [{
+        "expr": "sum(rate(taskmanager_http_requests_total{status_code=~'5..'}[5m])) / sum(rate(taskmanager_http_requests_total[5m])) * 100",
+        "legendFormat": "Error %"
+      }],
+      "thresholds": [{ "value": 5, "colorMode": "critical" }]
+    },
+    {
+      "id": 3,
+      "title": "Response Time p50 / p95 / p99",
+      "type": "graph",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(taskmanager_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(taskmanager_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(taskmanager_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Node.js Heap Memory",
+      "type": "graph",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "taskmanager_nodejs_heap_size_used_bytes",
+          "legendFormat": "Heap used"
+        },
+        {
+          "expr": "taskmanager_nodejs_heap_size_total_bytes",
+          "legendFormat": "Heap total"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Task Operations per Minute",
+      "type": "graph",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [{
+        "expr": "sum(rate(taskmanager_task_operations_total[1m])) by (operation)",
+        "legendFormat": "{{operation}}"
+      }]
+    },
+    {
+      "id": 6,
+      "title": "Active HTTP Requests",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 16, "w": 6, "h": 8 },
+      "targets": [{
+        "expr": "taskmanager_http_requests_in_flight",
+        "legendFormat": "In Flight"
+      }]
+    }
+  ]
+}

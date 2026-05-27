@@ -1,0 +1,84 @@
+# monitoring/prometheus/alert-rules.yml
+# Alert rules — when any of these conditions are true for the
+# specified duration, Prometheus fires an alert to Alertmanager,
+# which sends a notification to Slack/email/PagerDuty.
+
+groups:
+
+  - name: taskmanager-api-alerts
+    rules:
+
+      # API is completely down — no healthy instances
+      - alert: APIDown
+        expr: up{job="taskmanager-api"} == 0
+        for: 1m          # Must be true for 1 minute before firing
+        labels:
+          severity: critical
+        annotations:
+          summary: "Task Manager API is down"
+          description: "The API has been unreachable for more than 1 minute."
+
+      # High error rate — more than 5% of requests are 5xx
+      - alert: HighErrorRate
+        expr: |
+          rate(taskmanager_http_requests_total{status_code=~"5.."}[5m])
+          /
+          rate(taskmanager_http_requests_total[5m])
+          > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on Task Manager API"
+          description: "Error rate is {{ humanizePercentage $value }} over the last 5 minutes."
+
+      # Slow response times — p95 latency over 1 second
+      - alert: SlowResponseTime
+        expr: |
+          histogram_quantile(0.95,
+            rate(taskmanager_http_request_duration_seconds_bucket[5m])
+          ) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow API response times"
+          description: "95th percentile response time is {{ $value | humanizeDuration }}."
+
+      # High memory usage — heap over 200MB
+      - alert: HighMemoryUsage
+        expr: |
+          taskmanager_nodejs_heap_size_used_bytes
+          / taskmanager_nodejs_heap_size_total_bytes
+          > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High heap memory usage"
+          description: "Node.js heap is {{ humanizePercentage $value }} full."
+
+  - name: kubernetes-alerts
+    rules:
+
+      # Pod crashing repeatedly
+      - alert: PodCrashLooping
+        expr: |
+          rate(kube_pod_container_status_restarts_total{namespace="taskmanager"}[15m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pod is crash-looping"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is restarting repeatedly."
+
+      # Pod not ready
+      - alert: PodNotReady
+        expr: |
+          kube_pod_status_ready{namespace="taskmanager", condition="true"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod not ready"
+          description: "Pod {{ $labels.pod }} has been not ready for 5 minutes."
