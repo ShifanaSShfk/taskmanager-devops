@@ -103,7 +103,8 @@ jobs:
           name: Push image to Docker Hub
           command: |
             source $BASH_ENV
-              docker push $DOCKERHUB_USERNAME/taskmanager-devops:$IMAGE_TAG            if [ "$CIRCLE_BRANCH" = "main" ]; then
+              docker push $DOCKERHUB_USERNAME/taskmanager-devops:$IMAGE_TAG            
+              if [ "$CIRCLE_BRANCH" = "main" ]; then
               docker push $DOCKERHUB_USERNAME/taskmanager-devops:latest
             fi
 
