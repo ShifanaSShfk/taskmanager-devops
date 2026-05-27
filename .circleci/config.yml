@@ -95,17 +95,16 @@ jobs:
             IMAGE_TAG="${CIRCLE_BRANCH}-${CIRCLE_SHA1:0:7}"
             docker build \
               --target production \
-              -t $DOCKERHUB_USERNAME/taskmanager-api:$IMAGE_TAG \
-              -t $DOCKERHUB_USERNAME/taskmanager-api:latest \
+              -t $DOCKERHUB_USERNAME/taskmanager-devops:$IMAGE_TAG \
+              -t $DOCKERHUB_USERNAME/taskmanager-devops:latest \
               .
             echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
       - run:
           name: Push image to Docker Hub
           command: |
             source $BASH_ENV
-            docker push $DOCKERHUB_USERNAME/taskmanager-api:$IMAGE_TAG
-            if [ "$CIRCLE_BRANCH" = "main" ]; then
-              docker push $DOCKERHUB_USERNAME/taskmanager-api:latest
+              docker push $DOCKERHUB_USERNAME/taskmanager-devops:$IMAGE_TAG            if [ "$CIRCLE_BRANCH" = "main" ]; then
+              docker push $DOCKERHUB_USERNAME/taskmanager-devops:latest
             fi
 
   deploy-staging:
@@ -119,7 +118,7 @@ jobs:
             echo "Deploying $IMAGE_TAG to staging..."
             # In a real setup: SSH to staging server and pull the new image
             # Or: use kubectl to update the staging deployment (Phase 5)
-            echo "Deployment command: docker pull taskmanager-api:$IMAGE_TAG"
+            echo "Deployment command: docker pull taskmanager-devops:$IMAGE_TAG"
       - run:
           name: Smoke tests on staging
           command: |
@@ -150,7 +149,7 @@ jobs:
           command: |
             IMAGE_TAG="${CIRCLE_SHA1:0:7}"
             echo "DEPLOYING $IMAGE_TAG TO PRODUCTION"
-            # kubectl set image deployment/taskmanager api=taskmanager-api:$IMAGE_TAG
+            # kubectl set image deployment/taskmanager api=taskmanager-devops:$IMAGE_TAG
             # (we'll fill this in during Phase 5 — Kubernetes)
             echo "Production deployment complete"
       - run:
