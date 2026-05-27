@@ -1,70 +1,45 @@
-# .circleci/config.yml
-# CircleCI handles our production deployment workflow.
-# It picks up where Jenkins left off — after staging is healthy.
-
 version: 2.1
 
-# ── Reusable commands ─────────────────────────────────────────────
-# Define steps once, use them multiple times
-commands:
-  setup-node:
-    description: "Install Node.js dependencies with caching"
-    steps:
-      - restore_cache:                 # Restore node_modules from cache
-          keys:
-            - npm-deps-v1-{{ checksum "package-lock.json" }}
-            - npm-deps-v1-           # Fallback to any recent cache
-      - run:
-          name: Install dependencies
-          command: npm ci
-      - save_cache:                   # Save for next run
-          key: npm-deps-v1-{{ checksum "package-lock.json" }}
-          paths:
-            - node_modules
-
-  docker-login:
-    description: "Login to Docker Hub"
-    steps:
-      - run:
-          name: Docker login
-          command: |
-            echo "$DOCKERHUB_TOKEN" | \
-            docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-
-# ── Executors ─────────────────────────────────────────────────────
-# Reusable execution environments
 executors:
   node-executor:
     docker:
       - image: cimg/node:18.0
-    working_directory: ~/app
-
-  node-with-services:
-    docker:
-      - image: cimg/node:18.0        # Main container
-      - image: cimg/postgres:15.0    # Sidecar — available at localhost:5432
+      - image: cimg/postgres:15.0
         environment:
           POSTGRES_DB: taskmanager_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: testpassword
-      - image: cimg/redis:7.0        # Sidecar — available at localhost:6379
+      - image: cimg/redis:7.0
     working_directory: ~/app
 
-# ── Jobs ──────────────────────────────────────────────────────────
 jobs:
-
   test:
-    executor: node-with-services
+    executor: node-executor
+
     steps:
       - checkout
-      - setup-node
+
+      - restore_cache:
+          keys:
+            - npm-deps-v1-{{ checksum "package-lock.json" }}
+
+      - run:
+          name: Install dependencies
+          command: npm ci
+
+      - save_cache:
+          key: npm-deps-v1-{{ checksum "package-lock.json" }}
+          paths:
+            - node_modules
+
       - run:
           name: Wait for services
           command: |
             dockerize -wait tcp://localhost:5432 -timeout 60s
             dockerize -wait tcp://localhost:6379 -timeout 60s
+
       - run:
-          name: Run full test suite
+          name: Run tests
           command: npm test -- --ci --coverage
           environment:
             NODE_ENV: test
@@ -76,120 +51,48 @@ jobs:
             REDIS_HOST: localhost
             REDIS_PORT: "6379"
             JWT_SECRET: circleci-test-secret-32-chars-minimum
-      - store_test_results:
-          path: coverage              # CircleCI parses test results and shows them in the UI
+
       - store_artifacts:
-          path: coverage/lcov-report
-          destination: coverage-report
+          path: coverage
 
   build-and-push:
-    executor: node-executor
+    docker:
+      - image: cimg/node:18.0
+
+    working_directory: ~/app
+
     steps:
       - checkout
-      - setup_remote_docker:         # CircleCI's way to enable Docker commands
+
+      - setup_remote_docker:
           version: docker23
-      - docker-login
+
       - run:
-          name: Build production image
+          name: Docker login
           command: |
-            IMAGE_TAG="${CIRCLE_BRANCH}-${CIRCLE_SHA1:0:7}"
+            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+
+      - run:
+          name: Build Docker image
+          command: |
             docker build \
-              --target production \
-              -t $DOCKERHUB_USERNAME/taskmanager-devops:$IMAGE_TAG \
-              -t $DOCKERHUB_USERNAME/taskmanager-devops:latest \
-              .
-            echo "export IMAGE_TAG=$IMAGE_TAG" >> $BASH_ENV
+              -t $DOCKERHUB_USERNAME/taskmanager-devops:latest .
+
       - run:
-          name: Push image to Docker Hub
+          name: Push Docker image
           command: |
-            source $BASH_ENV
-
-            docker push $DOCKERHUB_USERNAME/taskmanager-devops:$IMAGE_TAG
-
-            if [ "$CIRCLE_BRANCH" = "main" ]; then
             docker push $DOCKERHUB_USERNAME/taskmanager-devops:latest
-            fi
 
-  deploy-staging:
-    executor: node-executor
-    steps:
-      - checkout
-      - run:
-          name: Deploy to staging
-          command: |
-            IMAGE_TAG="${CIRCLE_BRANCH}-${CIRCLE_SHA1:0:7}"
-            echo "Deploying $IMAGE_TAG to staging..."
-            # In a real setup: SSH to staging server and pull the new image
-            # Or: use kubectl to update the staging deployment (Phase 5)
-            echo "Deployment command: docker pull taskmanager-devops:$IMAGE_TAG"
-      - run:
-          name: Smoke tests on staging
-          command: |
-            echo "Staging smoke tests skipped for local learning setup"
-
-  # This job pauses and waits for a human to click "Approve" in CircleCI UI
-  # Nothing deploys to production without a human sign-off
-  approve-production:
-    executor: node-executor
-    steps:
-      - run:
-          name: Awaiting approval
-          command: echo "Production deployment pending approval..."
-
-  deploy-production:
-    executor: node-executor
-    steps:
-      - checkout
-      - run:
-          name: Deploy to production
-          command: |
-            IMAGE_TAG="${CIRCLE_SHA1:0:7}"
-            echo "DEPLOYING $IMAGE_TAG TO PRODUCTION"
-            # kubectl set image deployment/taskmanager api=taskmanager-devops:$IMAGE_TAG
-            # (we'll fill this in during Phase 5 — Kubernetes)
-            echo "Production deployment complete"
-      - run:
-          name: Post-deployment health check
-          command: |
-            echo "Production health check skipped"
-      - run:
-          name: Rollback on failure
-          when: on_fail              # Only runs if the previous step failed
-          command: |
-            echo "Deployment failed — rolling back..."
-            # kubectl rollout undo deployment/taskmanager  (Phase 5)
-
-# ── Workflows ─────────────────────────────────────────────────────
-# Workflows define how jobs connect and when they run
 workflows:
-
-  # Main pipeline — runs on every push
-  build-test-deploy:
+  build-test:
     jobs:
       - test
 
       - build-and-push:
-          requires: [test]           # Runs after test passes
+          requires:
+            - test
           filters:
             branches:
-              only: [main, develop]  # Only build image from these branches
-
-      - deploy-staging:
-          requires: [build-and-push]
-          filters:
-            branches:
-              only: develop          # Only deploy to staging from develop
-
-      # Human approval gate — someone must click Approve in CircleCI UI
-      - approve-production:
-          type: approval             # This is the approval gate
-          requires: [deploy-staging]
-          filters:
-            branches:
-              only: main             # Only offer production deployment from main
-
-      - deploy-production:
-          requires: [approve-production]  # Runs only after a human approves
-          filters:
-            branches:
-              only: main
+              only:
+                - develop
+                - main
