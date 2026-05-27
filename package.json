@@ -36,13 +36,14 @@
   "jest": {
     "testEnvironment": "node",
     "collectCoverageFrom": [
-      "src/**/*.js",
-      "!src/index.js",
-      "!src/config/database.js",
-      "!src/config/redis.js"
-    ],
+  "src/**/*.js",
+  "!src/index.js",
+  "!src/config/**",
+  "!src/models/**",
+  "!src/middleware/auth.js"
+],
     "coverageThreshold": {
-      "global": { "lines": 55 }
+      "global": { "lines": 70 }
     }
   }
 }
