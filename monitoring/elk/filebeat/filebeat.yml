@@ -1,45 +1,19 @@
-# monitoring/elk/filebeat/filebeat.yml
-# Filebeat runs as a DaemonSet on every Kubernetes node.
-# It tails container log files and ships them to Logstash.
-
 filebeat.inputs:
-
-  # Collect logs from all Docker containers
   - type: container
     paths:
       - /var/lib/docker/containers/*/*.log
-
-    # Add metadata from Kubernetes (pod name, namespace, labels)
-    processors:
-      - add_kubernetes_metadata:
-          host: ${NODE_NAME}
-          matchers:
-            - logs_path:
-                logs_path: "/var/lib/docker/containers/"
-
-    # Only collect logs from our namespace
-    # Remove this to collect from ALL pods cluster-wide
     fields:
       app: taskmanager
     fields_under_root: true
 
-# Ship to Logstash (which parses and enriches before sending to Elasticsearch)
+processors:
+  - add_docker_metadata:
+      host: "unix:///var/run/docker.sock"
+
 output.logstash:
   hosts: ["logstash:5044"]
 
-# Alternatively ship directly to Elasticsearch (simpler but no parsing)
-# output.elasticsearch:
-#   hosts: ["elasticsearch:9200"]
-#   index: "taskmanager-logs-%{+yyyy.MM.dd}"
-
-# How often to check for new log files
 filebeat.config.reload.enabled: true
 filebeat.config.reload.period: 10s
 
-# Logging (filebeat's own logs)
 logging.level: info
-logging.to_files: true
-logging.files:
-  path: /var/log/filebeat
-  name: filebeat
-  keepfiles: 3
